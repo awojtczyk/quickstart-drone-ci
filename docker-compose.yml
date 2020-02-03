@@ -1,0 +1,201 @@
+
+# @Description: Example of a Docker Compose that 
+# implements the services (Traefik, Gitea, Drone CI).
+# @Fonts:
+#   - https://docs.docker.com/compose/compose-file/
+#   - https://docs.docker.com/network/
+#   - https://docs.docker.com/storage/volumes/
+
+version: "3.7"
+
+# Defining docker volumes with the DRIVER(local).
+volumes:
+  vol_gitea_db:
+    driver: local # Path: /var/lib/docker/volumes/quickstart-drone-ci_vol_gitea_db/_data
+  vol_gitea_db_ui:
+    driver: local # Path: /var/lib/docker/volumes/quickstart-drone-ci_vol_gitea_db_ui/_data
+  vol_gitea_server:
+    driver: local # Path: /var/lib/docker/volumes/quickstart-drone-ci_vol_gitea_server/_data
+  vol_drone_server:
+    driver: local # Path: /var/lib/docker/volumes/quickstart-drone-ci_vol_drone_server/_data
+
+# Defining a local network with the DRIVER(bridge).
+networks:
+  network_local:
+    external: false
+
+services:
+  # Defining a reverse proxy service using Traefik.
+  reverse_proxy:
+    image: traefik:v2.1.1
+    container_name: reverse_proxy 
+    command:
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.endpoint=unix:///var/run/docker.sock"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=network_public"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencryptresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencryptresolver.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencryptresolver.acme.email=you-email@domain.com"
+      - "--certificatesresolvers.letsencryptresolver.acme.storage=/etc/traefik/letsencrypt/acme.json"
+      - "--log.level=DEBUG"
+      - "--log.format=common" 
+      - "--log.filePath=/var/log/traefik/traefik.log"
+      - "--accesslog=true"
+      - "--accesslog.filepath=/var/log/traefik/access-log"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.http-catchall.rule=hostregexp(`{host:.+}`)"
+      - "traefik.http.routers.http-catchall.entrypoints=web"
+      - "traefik.http.routers.http-catchall.middlewares=redirect-https@docker"
+      - "traefik.http.routers.http-catchall.priority=1"
+      - "traefik.http.middlewares.redirect-https.redirectscheme.scheme=https"
+      - "traefik.http.routers.api.rule=Host(`traefik.docker.localhost`)"
+      - "traefik.http.routers.api.service=api@internal"
+      - "traefik.http.routers.api.middlewares=auth"
+      - "traefik.http.routers.api.priority=2"
+      - "traefik.http.middlewares.auth.basicauth.users=test:$$apr1$$H6uskkkW$$IgXLP6ewTrSuBkTrqE8wj/"
+    restart: on-failure
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    ports:
+      - "80:80" # The HTTP port.
+      - "443:443" # The HTTPS port.
+      - "8080:8080" # The Web UI (Enabled by --api).
+    networks:
+      - network_local
+      # network_local:
+      #   aliases:
+      #     - gitea.pgadmin.docker.localhost
+      #     - gitea.docker.localhost
+      #     - drone.docker.localhost
+
+
+  # Defining a database service for Gitea Server.
+  gitea_db:
+    image: postgres:12.1 # The official docker image.
+    container_name: gitea_db
+    environment:
+      - POSTGRES_DB=gitea
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - PGDATA=/var/lib/postgresql/data
+    command:
+      - "--logging_collector=on"
+      - "--log_statement=all"
+      - "--log_filename=postgresql-%Y-%m-%d_%H%M%S.log"
+      - "--log_directory=/var/log/postgresql"
+    volumes:
+      - "vol_gitea_db:/var/lib/postgresql/data"
+    restart: always
+    ports:
+      - "5432:5432"
+    networks:
+      - network_local
+
+  # Defining a PgAdmin service from the database used on Gitea Server.
+  gitea_db_ui:
+    image: dpage/pgadmin4:4.17
+    container_name: gitea_db_ui
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=you-email@domain.com
+      - PGADMIN_DEFAULT_PASSWORD=secret
+    depends_on:
+      - gitea_db
+      - reverse_proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gitea_db_ui.rule=Host(`gitea.pgadmin.docker.localhost`)"
+      - "traefik.http.routers.gitea_db_ui.entrypoints=websecure"
+      - "traefik.http.routers.gitea_db_ui.tls.certresolver=letsencryptresolver"
+      - "traefik.http.services.gitea_db_ui.loadbalancer.server.port=80"
+    volumes:
+      - "vol_gitea_db_ui:/var/lib/pgadmin"
+    restart: unless-stopped
+    networks:
+      - network_local
+
+  # Defining a GIT version control service.
+  gitea_server: 
+    image: gitea/gitea:1.10.2 # The official docker image.
+    container_name: gitea_server
+    environment:
+      - RUN_MODE=dev
+      - ROOT_URL=https://gitea.docker.localhost
+      - DB_TYPE=postgres
+      - DB_NAME=gitea
+      - DB_HOST=gitea_db:5432
+      - DB_USER=postgres
+      - DB_PASSWD=postgres
+      - USER_UID=1000
+      - USER_GID=1000
+    depends_on:
+      - gitea_db
+      - reverse_proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gitea_server.rule=Host(`gitea.docker.localhost`)"
+      - "traefik.http.routers.gitea_server.entrypoints=websecure"
+      - "traefik.http.routers.gitea_server.tls.certresolver=letsencryptresolver"
+      - "traefik.http.services.gitea_server.loadbalancer.server.port=3000"
+    volumes:
+      - "vol_gitea_server:/data"
+    restart: unless-stopped
+    ports:
+      - "222:222"
+    networks:
+      - network_local
+
+
+
+
+  drone_server:
+    image: drone/drone:0.8
+    container_name: drone_server
+    environment:
+      - DRONE_OPEN=true
+      - DRONE_HOST=https://drone.docker.localhost
+      #- DRONE_SERVER_PROTO=https
+      - DRONE_GITEA=true
+      - DRONE_GITEA_URL=https://gitea.docker.localhost
+      - DRONE_SECRET=secret
+      - DRONE_NETWORK=network_local
+      - DRONE_DEBUG=true
+      - DRONE_TRACE=true
+    depends_on:
+      - gitea_server
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.drone_server.rule=Host(`drone.docker.localhost`)"
+      - "traefik.http.routers.drone_server.entrypoints=websecure"
+      - "traefik.http.routers.drone_server.tls.certresolver=letsencryptresolver"
+      - "traefik.http.services.drone_server.loadbalancer.server.port=8000"
+    volumes:
+      - "vol_drone_server:/var/lib/drone"
+    restart: always
+    ports:
+      - "9000:9000"
+    networks:
+      - network_local
+
+
+  drone_agent:
+    image: drone/agent:0.8
+    container_name: drone_agent 
+    environment:
+      - DRONE_SERVER=drone_server:9000
+      - DRONE_SECRET=secret
+      - DRONE_DEBUG=true
+      - DRONE_TRACE=true
+    command: agent
+    depends_on:
+      - drone_server
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    restart: always
+    networks:
+      - network_local
+
