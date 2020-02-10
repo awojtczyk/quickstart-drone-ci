@@ -57,6 +57,7 @@ services:
       - "traefik.http.routers.api.service=api@internal"
       - "traefik.http.routers.api.middlewares=auth"
       - "traefik.http.routers.api.priority=2"
+      # Access with username and password: test
       - "traefik.http.middlewares.auth.basicauth.users=test:$$apr1$$H6uskkkW$$IgXLP6ewTrSuBkTrqE8wj/"
     restart: on-failure
     volumes:
@@ -118,7 +119,7 @@ services:
     networks:
       - network_local
 
-  # Defining a GIT version control service.
+  # Defining a version control service using Gitea(Git with a cup of tea).
   gitea_server: 
     image: gitea/gitea:1.10.2 # The official docker image.
     container_name: gitea_server
@@ -149,22 +150,51 @@ services:
     networks:
       - network_local
 
-
-
-
+  # 
   drone_server:
-    image: drone/drone:0.8
+    image: drone/drone:1.6.5
     container_name: drone_server
     environment:
-      - DRONE_OPEN=true
-      - DRONE_HOST=https://drone.docker.localhost
-      #- DRONE_SERVER_PROTO=https
-      - DRONE_GITEA=true
-      - DRONE_GITEA_URL=https://gitea.docker.localhost
-      - DRONE_SECRET=secret
-      - DRONE_NETWORK=network_local
-      - DRONE_DEBUG=true
-      - DRONE_TRACE=true
+      # Required string value configures the user-facing hostname.
+      - DRONE_SERVER_HOST=drone.docker.localhost
+      # Required string value configures the user-facing protocol.
+      - DRONE_SERVER_PROTO=https
+      #- DRONE_SERVER_PROTO=http
+      # Automatically generates an SSL certificate using Lets Encrypt,
+      # and configures the server to accept HTTPS requests.
+      - DRONE_TLS_AUTOCERT=true
+      #- DRONE_TLS_AUTOCERT=false
+      # Required literal value provides the Drone shared secret.
+      # This is used to authenticate the RPC connection to the server. 
+      - DRONE_RPC_SECRET=secret
+      # Configures the database driver name. 
+      - DRONE_DATABASE_DRIVER=sqlite3
+      # Configures the database connection string.
+      - DRONE_DATABASE_DATASOURCE=/var/lib/drone/drone.sqlite
+
+      # Optional comma separated list. Provides a list of Docker networks
+      # that are attached to every pipeline step.
+      - DRONE_RUNNER_NETWORKS=network_local
+
+      # GITEA params:
+      # Required string value provides your Gitea oauth Client ID.
+      - DRONE_GITEA_CLIENT_ID=
+      # Required string value provides your Gitea oauth Client Secret.
+      - DRONE_GITEA_CLIENT_SECRET=
+      # Require string value provides your Gitea server address.
+      #- DRONE_GITEA_SERVER=http://gitea_app:3000
+      - DRONE_GITEA_SERVER=https://gitea.docker.localhost
+
+      # Enables trace logging. 
+      - DRONE_LOGS_TRACE=true
+      # Enables debug logging:
+      - DRONE_LOGS_DEBUG=true
+      - DRONE_LOGS_TEXT=true
+      - DRONE_LOGS_PRETTY=true
+      - DRONE_LOGS_COLOR=true
+
+      # TODO: CHECK PARAMETERS!
+      - DRONE_AGENTS_ENABLED=true
     depends_on:
       - gitea_server
     labels:
@@ -172,7 +202,7 @@ services:
       - "traefik.http.routers.drone_server.rule=Host(`drone.docker.localhost`)"
       - "traefik.http.routers.drone_server.entrypoints=websecure"
       - "traefik.http.routers.drone_server.tls.certresolver=letsencryptresolver"
-      - "traefik.http.services.drone_server.loadbalancer.server.port=8000"
+      - "traefik.http.services.drone_server.loadbalancer.server.port=80"
     volumes:
       - "vol_drone_server:/var/lib/drone"
     restart: always
@@ -180,16 +210,38 @@ services:
       - "9000:9000"
     networks:
       - network_local
-
-
+  
+  # 
   drone_agent:
-    image: drone/agent:0.8
+    image: drone/agent:1.6.2
     container_name: drone_agent 
     environment:
-      - DRONE_SERVER=drone_server:9000
-      - DRONE_SECRET=secret
+      # Enable and setup the Dashboard:
+      # Sets the basic authentication username used to authenticate and access the web dashboard.
+      - DRONE_UI_USERNAME=root
+      # Sets the basic authentication password used to authenticate and access the web dashboard.
+      - DRONE_UI_PASSWORD=root
+
+      # Required string values. Defines the hostname (and optional port) used to connect to the Drone server.
+      - DRONE_RPC_HOST=drone_server:9000
+      # Required string value. Defines the protocol used to connect to the Drone server. The value must be either http or https.
+      - DRONE_RPC_PROTO=https
+      # Required string value. Provides the shared secret used by the Drone server to authenticate http requests.
+      - DRONE_RPC_SECRET=secret
+      # Limits the number of concurrent pipelines that a runner can execute.
+      - DRONE_RUNNER_CAPACITY=2
+      # Optional comma separated list. Provides a list of Docker networks
+      # that are attached to every pipeline step.
+      - DRONE_RUNNER_NETWORKS=network_local
+
+      # Setup Logging:
+      # Enables debug level logging.
       - DRONE_DEBUG=true
+      # Enables trace level logging.
       - DRONE_TRACE=true
+      # should only be enabled to troubleshoot communication issues.
+      - DRONE_RPC_DUMP_HTTP=true
+      - DRONE_RPC_DUMP_HTTP_BODY=true
     command: agent
     depends_on:
       - drone_server

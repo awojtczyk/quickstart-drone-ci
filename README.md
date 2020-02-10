@@ -50,6 +50,13 @@ docker stop $(docker ps -a -q) && docker rm $(docker ps -a -q) && docker rmi $(d
 
 
 
+
+    
+https://blog.anoff.io/2019-03-24-self-hosted-gitea-drone/
+
+
+https://blog.anoff.io/2019-03-24-self-hosted-gitea-drone/
+
 https://www.optimadata.nl/blogs/3/nlm8ci-how-to-run-postgres-on-docker-part-3
 
 https://www.depesz.com/2011/05/06/understanding-postgresql-conf-log/
