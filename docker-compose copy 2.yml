@@ -22,7 +22,7 @@ volumes:
 # Defining a local network with the DRIVER(bridge).
 networks:
   network_local:
-    name: network_local
+    external: false
 
 services:
   # Defining a reverse proxy service using Traefik.
@@ -159,7 +159,7 @@ services:
     container_name: drone_server
     environment:
       # Required string value configures the user-facing hostname.
-      - DRONE_SERVER_HOST=drone_server:9090
+      - DRONE_SERVER_HOST=drone.docker.localhost
       # Required string value configures the user-facing protocol.
       - DRONE_SERVER_PROTO=http
       # Automatically generates an SSL certificate using Lets Encrypt,
@@ -197,12 +197,10 @@ services:
       - "vol_drone_server:/var/lib/drone"
     restart: always
     ports:
-      - "9090:80"
-      - "9000:443"
+      - "9000:9000"
     networks:
       - network_local
-
-
+  
   # 
   drone_agent:
     #image: drone/agent:1.6.2
@@ -216,7 +214,7 @@ services:
       - DRONE_UI_PASSWORD=root
 
       # Required string values. Defines the hostname (and optional port) used to connect to the Drone server.
-      - DRONE_RPC_HOST=drone_server:9090
+      - DRONE_RPC_HOST=drone_server:9000
       # Required string value. Provides the shared secret used by the Drone server to authenticate http requests.
       - DRONE_RPC_SECRET=secret
       # Required string value. Defines the protocol used to connect to the Drone server. The value must be either http or https.
@@ -240,10 +238,10 @@ services:
       - drone_server
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.drone_agent.rule=Host(`drone.docker.localhost`)"
-      - "traefik.http.routers.drone_agent.entrypoints=websecure"
-      - "traefik.http.routers.drone_agent.tls.certresolver=letsencryptresolver"
-      - "traefik.http.services.drone_agent.loadbalancer.server.port=3000"
+      - "traefik.http.routers.drone_server.rule=Host(`drone.docker.localhost`)"
+      - "traefik.http.routers.drone_server.entrypoints=websecure"
+      - "traefik.http.routers.drone_server.tls.certresolver=letsencryptresolver"
+      - "traefik.http.services.drone_server.loadbalancer.server.port=3000"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
     restart: always
