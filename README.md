@@ -48,10 +48,16 @@ docker system prune -a;
 ## OU...
 docker stop $(docker ps -a -q) && docker rm $(docker ps -a -q) && docker rmi $(docker images -q);
 
-
-
+docker container stop
+docker container prune
+docker volume prune
+docker image prune
+docker network prune
 
     
+
+https://developer.okta.com/blog/2017/10/11/developers-guide-to-docker-part-3
+
 https://blog.anoff.io/2019-03-24-self-hosted-gitea-drone/
 
 
