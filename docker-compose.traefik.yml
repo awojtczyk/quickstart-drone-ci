@@ -71,6 +71,7 @@ services:
         aliases:
           - gitea.docker.localhost
           - drone.docker.localhost
+          - droneagent.docker.localhost
 
   # Defining a database service for Gitea Server.
   gitea_db:
@@ -149,9 +150,9 @@ services:
       # Require string value provides your Gitea server address.
       - DRONE_GITEA_SERVER=https://gitea.docker.localhost
       # Required string value provides your Gitea oauth Client ID.
-      - DRONE_GITEA_CLIENT_ID=6690f953-99ca-48c9-aac0-e1aa9fa2bd42
+      - DRONE_GITEA_CLIENT_ID=d1d2df85-426a-414f-a9ee-1b2ddeb0249f
       # Required string value provides your Gitea oauth Client Secret.
-      - DRONE_GITEA_CLIENT_SECRET=A56JSpTa-OF63nKQxTX2HU0Bm6ZlKod7wsG_-NsjL_8=
+      - DRONE_GITEA_CLIENT_SECRET=My92a-km22ND4V0Fr0nTYk5vTvQlkU89ZNu6-9ofqaM=
       # Boolean value disables tls verification when establishing a
       # connection to the remote Gitea server.
       - DRONE_GITEA_SKIP_VERIFY=true
@@ -190,12 +191,23 @@ services:
     image: drone/drone-runner-docker:1 # Official image of the Docker Hub.
     container_name: drone_agent 
     environment:
+      # Enable and setup the Dashboard:
+      # Disables the runner’s user interface.
+      - DRONE_UI_DISABLE=false # (Default is true)
+      # Access with username and password: root
+      # Sets the basic authentication username used to authenticate and access the web dashboard.
+      - DRONE_UI_USERNAME=root
+      # Sets the basic authentication password used to authenticate and access the web dashboard.
+      - DRONE_UI_PASSWORD=root
+
       # Required string values. Defines the hostname (and optional port) used to connect to the Drone server.
       - DRONE_RPC_HOST=drone.docker.localhost
       # Required string value. Defines the protocol used to connect to the Drone server. The value must be either http or https.
       - DRONE_RPC_PROTO=https
       # Required string value. Provides the shared secret used by the Drone server to authenticate http requests.
       - DRONE_RPC_SECRET=secret
+      # Disable SSL verification when making http requests to the Drone server. 
+      - DRONE_RPC_SKIP_VERIFY=true
 
       # Limits the number of concurrent pipelines that a runner can execute.
       - DRONE_RUNNER_CAPACITY=2
@@ -211,10 +223,18 @@ services:
       # should only be enabled to troubleshoot communication issues.
       - DRONE_RPC_DUMP_HTTP=true
       - DRONE_RPC_DUMP_HTTP_BODY=true
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.drone_agent.rule=Host(`droneagent.docker.localhost`)"
+      - "traefik.http.routers.drone_agent.entrypoints=websecure"
+      - "traefik.http.routers.drone_agent.tls.certresolver=letsencryptresolver"
+      - "traefik.http.services.drone_agent.loadbalancer.server.port=3000"
     depends_on:
       - drone_server
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
     restart: always
     networks:
-      - network_local
+      network_local:
+        aliases:
+          - droneagent.docker.localhost
