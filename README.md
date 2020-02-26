@@ -33,6 +33,25 @@ docker exec <"ID DE UM DETERMINADO CONTÊINER"> ls /var/log/postgresql
 
 docker exec 823 ls /var/log/postgresql
 
+
+docker exec gitea_server gitea version
+docker exec gitea_server gitea --version
+
+docker exec gitea_server gitea admin auth list
+
+docker exec gitea_server gitea doctor
+
+
+
+
+
+docker exec <"ID DE UM DETERMINADO CONTÊINER"> /var/lib/gitea admin auth list 
+
+docker exec 5e gitea auth list    
+
+docker exec -it 5e "bash"
+
+
 # Testar se a aplicação está funcionando.
 curl -H Host:whoami.docker.localhost https://127.0.0.1 --insecure;
 
@@ -54,12 +73,23 @@ docker volume prune
 docker image prune
 docker network prune
 
-    
+
+e8dff3df-218c-40a2-9022-a1ba67ab3269
+
+https://gitea.docker.localhost/login/oauth/authorize?client_id=e8dff3df-218c-40a2-9022-a1ba67ab3269&redirect_uri=https%3A%2F%2Fdroneserver.docker.localhost%2Flogin&response_type=code&state=4d65822107fcfd52
+
+
+
+https://community.containo.us/t/routing-ssh-traffic-with-traefik-v2/717/12
+
 
 https://developer.okta.com/blog/2017/10/11/developers-guide-to-docker-part-3
 
 https://blog.anoff.io/2019-03-24-self-hosted-gitea-drone/
 
+
+https://github.com/hamdouni/gitea-drone/blob/master/docker-compose.yml
+https://www.reddit.com/r/docker/comments/cv689q/connection_refused_when_cloning_from_gitea_in_the/
 
 https://blog.anoff.io/2019-03-24-self-hosted-gitea-drone/
 
