@@ -21,6 +21,7 @@ volumes:
 networks:
   network_local:
     external: false
+    name: network_local
 
 services:
   # Defining a reverse proxy service using Traefik.
@@ -32,7 +33,7 @@ services:
       - "--providers.docker=true"
       - "--providers.docker.endpoint=unix:///var/run/docker.sock"
       - "--providers.docker.exposedbydefault=false"
-      - "--providers.docker.network=network_public"
+      - "--providers.docker.network=network_local"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
       - "--certificatesresolvers.letsencryptresolver.acme.httpchallenge=true"
@@ -73,6 +74,7 @@ services:
           - drone.docker.localhost
           - droneagent.docker.localhost
 
+
   # Defining a database service for Gitea Server.
   gitea_db:
     image: postgres:12.1 # Official image of the Docker Hub.
@@ -95,12 +97,18 @@ services:
     networks:
       - network_local
 
+
   # Defining a version control service using Gitea(Git with a cup of tea).
   gitea_server: 
     image: gitea/gitea:1.10.2 # Official image of the Docker Hub.
     container_name: gitea_server
     environment:
       - ROOT_URL=https://gitea.docker.localhost
+
+      - HTTP_PORT=3000
+      - SSH_DOMAIN=gitea.docker.localhost
+      - SSH_PORT=22
+
       - DB_TYPE=postgres
       - DB_NAME=gitea
       - DB_HOST=gitea_db:5432
@@ -120,10 +128,12 @@ services:
     restart: unless-stopped
     ports:
       - "22:22"
+      - "3000:3000"
     networks:
       network_local:
         aliases:
           - gitea.docker.localhost
+
 
   # Drone Server is a runner and a standalone daemon that
   # polls the server for pending pipelines to execute.
@@ -135,6 +145,7 @@ services:
       - DRONE_SERVER_HOST=drone.docker.localhost
       # Required string value configures the user-facing protocol.
       - DRONE_SERVER_PROTO=https
+
       # Automatically generates an SSL certificate using Lets Encrypt,
       # and configures the server to accept HTTPS requests.
       - DRONE_TLS_AUTOCERT=false
@@ -150,12 +161,13 @@ services:
       # Require string value provides your Gitea server address.
       - DRONE_GITEA_SERVER=https://gitea.docker.localhost
       # Required string value provides your Gitea oauth Client ID.
-      - DRONE_GITEA_CLIENT_ID=d1d2df85-426a-414f-a9ee-1b2ddeb0249f
+      - DRONE_GITEA_CLIENT_ID=ca1df381-0dd8-4356-9db0-cc3587b44ebc
       # Required string value provides your Gitea oauth Client Secret.
-      - DRONE_GITEA_CLIENT_SECRET=My92a-km22ND4V0Fr0nTYk5vTvQlkU89ZNu6-9ofqaM=
+      - DRONE_GITEA_CLIENT_SECRET=F23ZKzWL2Kdj63zJ_F1hcQlCwoNYX6KCrRh0BAW-Y4Y=
       # Boolean value disables tls verification when establishing a
       # connection to the remote Gitea server.
       - DRONE_GITEA_SKIP_VERIFY=true
+      - DRONE_WEBHOOK_SKIP_VERIFY=true
 
       # Enables trace logging. 
       - DRONE_LOGS_TRACE=true
@@ -186,6 +198,7 @@ services:
         aliases:
           - drone.docker.localhost
 
+
   # Drone Agents is a runners poll the server for workloads to execute.
   drone_agent:
     image: drone/drone-runner-docker:1 # Official image of the Docker Hub.
@@ -215,6 +228,8 @@ services:
       # that are attached to every pipeline step.
       - DRONE_RUNNER_NETWORKS=network_local
 
+      # - DRONE_RUNNER_ENVIRON=GIT_SSL_NO_VERIFY:true
+
       # Setup Logging:
       # Enables debug level logging.
       - DRONE_DEBUG=true
@@ -238,3 +253,4 @@ services:
       network_local:
         aliases:
           - droneagent.docker.localhost
+
